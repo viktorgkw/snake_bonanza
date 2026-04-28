@@ -9,7 +9,6 @@ const int cellSize = 30;
 
 struct SnakeSegment {
 	int x, y;
-	Color color;
 };
 
 static bool IsOnSnake(const std::deque<SnakeSegment>& snake, int x, int y) {
@@ -37,23 +36,38 @@ static Vector2 GetRandomFoodPosition(const std::deque<SnakeSegment>& snake) {
 	return pos;
 }
 
+static Color GetRandomColor() {
+	Color randomColor = {
+		(unsigned char)GetRandomValue(80, 255),
+		(unsigned char)GetRandomValue(80, 255),
+		(unsigned char)GetRandomValue(80, 255),
+		255
+	};
+
+	return randomColor;
+}
+
 int main() {
 	InitWindow(screenWidth, screenHeight, "Snake (raylib)");
 	SetTargetFPS(60);
 
-	std::deque<SnakeSegment> snake = { {10, 10, BLACK} };
+	std::deque<SnakeSegment> snake = { {10, 10} };
+
 	Vector2 direction = { 1, 0 };
+	Color backgroundColor = GetRandomColor();
 
 	Vector2 food = GetRandomFoodPosition(snake);
+	Color foodColor = GetRandomColor();
 
 	bool showBonanza = false;
+	bool bonanzaUsed = false;
 	float bonanzaTimer = 0.0f;
 
 	bool gameOver = false;
+	int points{ 0 };
+
 	float moveTimer = 0;
 	float moveDelay = 0.15f;
-	int points{ 0 };
-	Color foodColor = YELLOW;
 
 	while (!WindowShouldClose()) {
 		float delta = GetFrameTime();
@@ -70,11 +84,11 @@ int main() {
 		direction = nextDirection;
 
 		// BONANZA
-		if (points > 0 && points % 5 == 0 && !showBonanza)
+		if (points > 0 && points % 5 == 0 && !showBonanza && !bonanzaUsed)
 		{
+			bonanzaUsed = true;
 			showBonanza = true;
 			bonanzaTimer = 3.0f;
-
 			moveDelay = 0.05f;
 		}
 
@@ -91,13 +105,18 @@ int main() {
 
 		// RESTART
 		if (gameOver && IsKeyPressed(KEY_R)) {
+			gameOver = false;
 			snake = { {10, 10} };
 			direction = { 1, 0 };
 			moveDelay = 0.15f;
 			points = 0;
+
 			showBonanza = false;
+			bonanzaUsed = false;
+
 			food = GetRandomFoodPosition(snake);
-			gameOver = false;
+			foodColor = GetRandomColor();
+			backgroundColor = GetRandomColor();
 		}
 
 		// MOVE ONLY WHEN TIMER TRIGGERS
@@ -107,20 +126,34 @@ int main() {
 			SnakeSegment newHead = {
 				snake.front().x + (int)direction.x,
 				snake.front().y + (int)direction.y,
-				BLACK,
 			};
 
+			int gridWidth = screenWidth / cellSize;
+			int gridHeight = screenHeight / cellSize;
+
 			// Wall collision
-			if (newHead.x < 0 || newHead.y < 0 ||
-				newHead.x >= screenWidth / cellSize ||
-				newHead.y >= screenHeight / cellSize) {
-				gameOver = true;
+			if (showBonanza) {
+				// If we go off-screen during Bonanza, wrap around
+				if (newHead.x < 0) newHead.x = gridWidth - 1;
+				else if (newHead.x >= gridWidth) newHead.x = 0;
+
+				if (newHead.y < 0) newHead.y = gridHeight - 1;
+				else if (newHead.y >= gridHeight) newHead.y = 0;
+			}
+			else {
+				// Normal Wall collision (Die if outside bounds)
+				if (newHead.x < 0 || newHead.y < 0 ||
+					newHead.x >= gridWidth ||
+					newHead.y >= gridHeight) {
+					gameOver = true;
+				}
 			}
 
 			// Self collision
 			for (size_t i = 0; i < snake.size(); i++) {
 				if (snake[i].x == newHead.x && snake[i].y == newHead.y) {
 					gameOver = true;
+					showBonanza = false;
 				}
 			}
 
@@ -131,16 +164,14 @@ int main() {
 				food = GetRandomFoodPosition(snake);
 				points++;
 
+				bonanzaUsed = false;
+
 				if (moveDelay > 0.06f) {
 					moveDelay -= 0.02f;
 				}
 
-				foodColor = {
-					(unsigned char)GetRandomValue(80, 255),
-					(unsigned char)GetRandomValue(80, 255),
-					(unsigned char)GetRandomValue(80, 255),
-					255
-				};
+				foodColor = GetRandomColor();
+				backgroundColor = GetRandomColor();
 			}
 			else {
 				snake.pop_back();
@@ -149,7 +180,7 @@ int main() {
 
 		// DRAW
 		BeginDrawing();
-		ClearBackground(DARKPURPLE);
+		ClearBackground(backgroundColor);
 
 		// Grid
 		for (int x = 0; x < screenWidth; x += cellSize)
@@ -160,7 +191,14 @@ int main() {
 
 		// Snake
 		for (auto& seg : snake) {
-			DrawRectangle(seg.x * cellSize, seg.y * cellSize, cellSize, cellSize, seg.color);
+			if (showBonanza)
+			{
+				Color rndColor = GetRandomColor();
+				DrawRectangle(seg.x * cellSize, seg.y * cellSize, cellSize, cellSize, rndColor);
+			}
+			else {
+				DrawRectangle(seg.x * cellSize, seg.y * cellSize, cellSize, cellSize, BLACK);
+			}
 		}
 
 		// Points
